@@ -9,6 +9,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Shield, Wallet, Eye, AlertTriangle, CheckCircle, Clock, RefreshCw } from "lucide-react"
 import { useWallet } from "@/hooks/useWallet"
 import { useOKXAPI } from "@/hooks/useOKXAPI"
+import { WalletSelector } from "@/components/wallet-selector"
 
 interface SecurityAlert {
   id: string
@@ -40,7 +41,15 @@ interface Balance {
 }
 
 export default function OKXSecurityApp() {
-  const { wallet, connectWallet, disconnectWallet, isConnecting } = useWallet()
+  const {
+    wallet,
+    connectWallet,
+    disconnectWallet,
+    isConnecting,
+    showWalletSelector,
+    closeWalletSelector,
+    availableProviders
+  } = useWallet()
   const { getBalances, getTransactionHistory, getTokenPrice, loading } = useOKXAPI()
 
   const [alerts, setAlerts] = useState<SecurityAlert[]>([])
@@ -134,7 +143,9 @@ export default function OKXSecurityApp() {
           <div className="flex items-center gap-3">
             <Shield className="h-8 w-8 text-blue-600" />
             <div>
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">OKX Security Suite</h1>
+              <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+                OKX Security Suite
+              </h1>
               <p className="text-slate-600">Privacy & Security Tooling</p>
             </div>
           </div>
@@ -154,7 +165,11 @@ export default function OKXSecurityApp() {
             )}
 
             {!wallet?.address ? (
-              <Button onClick={connectWallet} disabled={isConnecting} className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 shadow-lg shadow-blue-500/25 text-white">
+              <Button 
+                onClick={() => connectWallet()} 
+                disabled={isConnecting} 
+                className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 shadow-lg shadow-blue-500/25 text-white"
+              >
                 <Wallet className="h-4 w-4 mr-2" />
                 {isConnecting ? "Connecting..." : "Connect Wallet"}
               </Button>
@@ -168,7 +183,16 @@ export default function OKXSecurityApp() {
                     <span className="text-sm text-slate-700">{formatAddress(wallet.address)}</span>
                   </div>
                   <p className="text-xs text-slate-500">{wallet.chainName}</p>
+                  <p className="text-xs text-slate-500 capitalize">{wallet.provider} Wallet</p>
                 </div>
+                <Button
+                  onClick={() => connectWallet()}
+                  variant="outline"
+                  size="sm"
+                  className="border-blue-300 bg-blue-50 hover:bg-blue-100 text-blue-700"
+                >
+                  Switch Wallet
+                </Button>
                 <Button
                   onClick={disconnectWallet}
                   variant="outline"
@@ -192,8 +216,24 @@ export default function OKXSecurityApp() {
               <p className="text-slate-600 text-center mb-6">
                 Connect your wallet to access OKX security and privacy tools
               </p>
+              <p className="text-xs text-slate-500 text-center mb-4">
+                Choose from OKX Wallet, MetaMask, Coinbase Wallet, or Trust Wallet
+              </p>
+              {availableProviders.length === 0 ? (
+                <div className="text-center p-3 bg-amber-50 border border-amber-200 rounded-lg mb-4">
+                  <p className="text-xs text-amber-700">
+                    No wallets detected. Please install a Web3 wallet extension.
+                  </p>
+                </div>
+              ) : (
+                <div className="text-center p-3 bg-emerald-50 border border-emerald-200 rounded-lg mb-4">
+                  <p className="text-xs text-emerald-700">
+                    {availableProviders.length} wallet{availableProviders.length !== 1 ? 's' : ''} detected
+                  </p>
+                </div>
+              )}
               <Button
-                onClick={connectWallet}
+                onClick={() => connectWallet()}
                 disabled={isConnecting}
                 size="lg"
                 className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 shadow-lg shadow-blue-500/25 text-white"
@@ -206,19 +246,34 @@ export default function OKXSecurityApp() {
         ) : (
           <Tabs defaultValue="overview" className="space-y-6">
             <TabsList className="bg-white/80 border-slate-200 shadow-sm backdrop-blur-sm">
-              <TabsTrigger value="overview" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500/10 data-[state=active]:to-indigo-500/10 data-[state=active]:border-blue-300 data-[state=active]:text-blue-700">
+              <TabsTrigger 
+                value="overview" 
+                className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500/10 data-[state=active]:to-indigo-500/10 data-[state=active]:border-blue-300 data-[state=active]:text-blue-700"
+              >
                 Overview
               </TabsTrigger>
-              <TabsTrigger value="balances" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500/10 data-[state=active]:to-indigo-500/10 data-[state=active]:border-blue-300 data-[state=active]:text-blue-700">
+              <TabsTrigger 
+                value="balances" 
+                className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500/10 data-[state=active]:to-indigo-500/10 data-[state=active]:border-blue-300 data-[state=active]:text-blue-700"
+              >
                 Balances
               </TabsTrigger>
-              <TabsTrigger value="transactions" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500/10 data-[state=active]:to-indigo-500/10 data-[state=active]:border-blue-300 data-[state=active]:text-blue-700">
+              <TabsTrigger 
+                value="transactions" 
+                className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500/10 data-[state=active]:to-indigo-500/10 data-[state=active]:border-blue-300 data-[state=active]:text-blue-700"
+              >
                 Transactions
               </TabsTrigger>
-              <TabsTrigger value="privacy" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500/10 data-[state=active]:to-indigo-500/10 data-[state=active]:border-blue-300 data-[state=active]:text-blue-700">
+              <TabsTrigger 
+                value="privacy" 
+                className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500/10 data-[state=active]:to-indigo-500/10 data-[state=active]:border-blue-300 data-[state=active]:text-blue-700"
+              >
                 Privacy Tools
               </TabsTrigger>
-              <TabsTrigger value="monitoring" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500/10 data-[state=active]:to-indigo-500/10 data-[state=active]:border-blue-300 data-[state=active]:text-blue-700">
+              <TabsTrigger 
+                value="monitoring" 
+                className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500/10 data-[state=active]:to-indigo-500/10 data-[state=active]:border-blue-300 data-[state=active]:text-blue-700"
+              >
                 Security Monitor
               </TabsTrigger>
             </TabsList>
@@ -263,7 +318,7 @@ export default function OKXSecurityApp() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                       <p className="text-sm text-slate-600">Address</p>
                       <p className="font-mono text-sm break-all text-slate-800">{wallet.address}</p>
@@ -271,6 +326,10 @@ export default function OKXSecurityApp() {
                     <div>
                       <p className="text-sm text-slate-600">Network</p>
                       <p className="font-semibold text-slate-800">{wallet.chainName}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-slate-600">Wallet Provider</p>
+                      <p className="font-semibold text-slate-800 capitalize">{wallet.provider}</p>
                     </div>
                   </div>
                 </CardContent>
@@ -463,6 +522,15 @@ export default function OKXSecurityApp() {
           </Tabs>
         )}
       </div>
+
+      {/* Wallet Selector Modal */}
+      <WalletSelector
+        isOpen={showWalletSelector}
+        onClose={closeWalletSelector}
+        onSelectWallet={connectWallet}
+        availableProviders={availableProviders}
+        isConnecting={isConnecting}
+      />
     </div>
   )
 }

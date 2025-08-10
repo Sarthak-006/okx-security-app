@@ -7,17 +7,30 @@ interface WalletState {
   chainId: string
   chainName: string
   isConnected: boolean
+  provider: string
+}
+
+export interface WalletProvider {
+  id: string
+  name: string
+  icon: string
+  available: boolean
 }
 
 declare global {
   interface Window {
     ethereum?: any
+    okxwallet?: any
+    coinbaseWalletExtension?: any
+    trustwallet?: any
   }
 }
 
 export function useWallet() {
   const [wallet, setWallet] = useState<WalletState | null>(null)
   const [isConnecting, setIsConnecting] = useState(false)
+  const [showWalletSelector, setShowWalletSelector] = useState(false)
+  const [availableProviders, setAvailableProviders] = useState<WalletProvider[]>([])
 
   const getChainName = (chainId: string) => {
     const chains: { [key: string]: string } = {
@@ -32,21 +45,82 @@ export function useWallet() {
     return chains[chainId] || `Chain ${chainId}`
   }
 
-  const connectWallet = async () => {
-    if (!window.ethereum) {
-      alert("Please install MetaMask or another Web3 wallet")
+  // Detect available wallet providers
+  useEffect(() => {
+    const detectProviders = () => {
+      const providers: WalletProvider[] = [
+        {
+          id: "okxwallet",
+          name: "OKX Wallet",
+          icon: "🟢",
+          available: !!window.okxwallet
+        },
+        {
+          id: "metamask",
+          name: "MetaMask",
+          icon: "🦊",
+          available: !!window.ethereum && !window.ethereum.isOKXWallet
+        },
+        {
+          id: "coinbase",
+          name: "Coinbase Wallet",
+          icon: "🔵",
+          available: !!window.coinbaseWalletExtension
+        },
+        {
+          id: "trustwallet",
+          name: "Trust Wallet",
+          icon: "🟡",
+          available: !!window.trustwallet
+        }
+      ]
+      setAvailableProviders(providers.filter(p => p.available))
+    }
+
+    detectProviders()
+
+    // Re-detect when window loads
+    window.addEventListener('load', detectProviders)
+    return () => window.removeEventListener('load', detectProviders)
+  }, [])
+
+  const getProvider = (providerId: string) => {
+    switch (providerId) {
+      case "okxwallet":
+        return window.okxwallet
+      case "metamask":
+        return window.ethereum
+      case "coinbase":
+        return window.coinbaseWalletExtension
+      case "trustwallet":
+        return window.trustwallet
+      default:
+        return window.ethereum
+    }
+  }
+
+  const connectWallet = async (providerId?: string) => {
+    // If no specific provider, show selector
+    if (!providerId) {
+      setShowWalletSelector(true)
+      return
+    }
+
+    const provider = getProvider(providerId)
+    if (!provider) {
+      alert(`Please install ${providerId} wallet`)
       return
     }
 
     setIsConnecting(true)
     try {
       // Request account access
-      const accounts = await window.ethereum.request({
+      const accounts = await provider.request({
         method: "eth_requestAccounts",
       })
 
       // Get chain ID
-      const chainId = await window.ethereum.request({
+      const chainId = await provider.request({
         method: "eth_chainId",
       })
 
@@ -56,11 +130,14 @@ export function useWallet() {
           chainId: Number.parseInt(chainId, 16).toString(),
           chainName: getChainName(Number.parseInt(chainId, 16).toString()),
           isConnected: true,
+          provider: providerId,
         }
         setWallet(walletState)
+        setShowWalletSelector(false)
       }
     } catch (error) {
       console.error("Error connecting wallet:", error)
+      alert("Failed to connect wallet. Please try again.")
     } finally {
       setIsConnecting(false)
     }
@@ -68,36 +145,44 @@ export function useWallet() {
 
   const disconnectWallet = () => {
     setWallet(null)
+    setShowWalletSelector(false)
+  }
+
+  const closeWalletSelector = () => {
+    setShowWalletSelector(false)
   }
 
   // Listen for account changes
   useEffect(() => {
-    if (window.ethereum) {
-      const handleAccountsChanged = (accounts: string[]) => {
-        if (accounts.length === 0) {
-          setWallet(null)
-        } else if (wallet) {
-          setWallet({ ...wallet, address: accounts[0] })
+    if (wallet?.provider) {
+      const provider = getProvider(wallet.provider)
+      if (provider) {
+        const handleAccountsChanged = (accounts: string[]) => {
+          if (accounts.length === 0) {
+            setWallet(null)
+          } else if (wallet) {
+            setWallet({ ...wallet, address: accounts[0] })
+          }
         }
-      }
 
-      const handleChainChanged = (chainId: string) => {
-        if (wallet) {
-          const newChainId = Number.parseInt(chainId, 16).toString()
-          setWallet({
-            ...wallet,
-            chainId: newChainId,
-            chainName: getChainName(newChainId),
-          })
+        const handleChainChanged = (chainId: string) => {
+          if (wallet) {
+            const newChainId = Number.parseInt(chainId, 16).toString()
+            setWallet({
+              ...wallet,
+              chainId: newChainId,
+              chainName: getChainName(newChainId),
+            })
+          }
         }
-      }
 
-      window.ethereum.on("accountsChanged", handleAccountsChanged)
-      window.ethereum.on("chainChanged", handleChainChanged)
+        provider.on("accountsChanged", handleAccountsChanged)
+        provider.on("chainChanged", handleChainChanged)
 
-      return () => {
-        window.ethereum.removeListener("accountsChanged", handleAccountsChanged)
-        window.ethereum.removeListener("chainChanged", handleChainChanged)
+        return () => {
+          provider.removeListener("accountsChanged", handleAccountsChanged)
+          provider.removeListener("chainChanged", handleChainChanged)
+        }
       }
     }
   }, [wallet])
@@ -105,7 +190,35 @@ export function useWallet() {
   // Check if already connected on mount
   useEffect(() => {
     const checkConnection = async () => {
-      if (window.ethereum) {
+      // Check OKX Wallet first (priority)
+      if (window.okxwallet) {
+        try {
+          const accounts = await window.okxwallet.request({
+            method: "eth_accounts",
+          })
+
+          if (accounts.length > 0) {
+            const chainId = await window.okxwallet.request({
+              method: "eth_chainId",
+            })
+
+            const walletState: WalletState = {
+              address: accounts[0],
+              chainId: Number.parseInt(chainId, 16).toString(),
+              chainName: getChainName(Number.parseInt(chainId, 16).toString()),
+              isConnected: true,
+              provider: "okxwallet",
+            }
+            setWallet(walletState)
+            return
+          }
+        } catch (error) {
+          console.error("Error checking OKX wallet connection:", error)
+        }
+      }
+
+      // Check MetaMask
+      if (window.ethereum && !window.ethereum.isOKXWallet) {
         try {
           const accounts = await window.ethereum.request({
             method: "eth_accounts",
@@ -121,11 +234,13 @@ export function useWallet() {
               chainId: Number.parseInt(chainId, 16).toString(),
               chainName: getChainName(Number.parseInt(chainId, 16).toString()),
               isConnected: true,
+              provider: "metamask",
             }
             setWallet(walletState)
+            return
           }
         } catch (error) {
-          console.error("Error checking wallet connection:", error)
+          console.error("Error checking MetaMask connection:", error)
         }
       }
     }
@@ -138,5 +253,8 @@ export function useWallet() {
     connectWallet,
     disconnectWallet,
     isConnecting,
+    showWalletSelector,
+    closeWalletSelector,
+    availableProviders,
   }
 }
